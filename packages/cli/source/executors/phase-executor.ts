@@ -5,16 +5,18 @@ import {
   ScenarioExecutorEventType,
 } from "../utils/constants";
 import {
+  IContext,
   IPhaseExecutionEvent,
   IScenarioExecutionEvent,
-  TPhase,
 } from "../types";
 import { StepExecutor } from "./step-executor";
+import { v4 } from "uuid";
 
 export class PhaseExecutor extends EventEmitter {
   public constructor(
     private phases: ScenarioExecutor,
-    private stepExecutor: StepExecutor
+    private stepExecutor: StepExecutor,
+    private vars: Record<string, any>
   ) {
     super();
 
@@ -46,9 +48,19 @@ export class PhaseExecutor extends EventEmitter {
   async handlePhaseUserArrived(event: IScenarioExecutionEvent) {
     const { scenario, phase } = event;
 
+    const id = v4();
+    const context: IContext = {
+      ins: {},
+      outs: {},
+      vars: this.vars,
+      $: {},
+    };
+
     const startedEvent: IPhaseExecutionEvent = {
+      userId: id,
       phase,
       scenario,
+      context,
     };
     this.emit(PhaseExecutorEventType.STEPS_STARTED, startedEvent);
 
@@ -57,15 +69,19 @@ export class PhaseExecutor extends EventEmitter {
        * Promise.all here.
        */
       await this.stepExecutor.execute({
+        userId: id,
         scenario,
         phase,
         step,
+        context,
       });
     }
 
     const completedEvent: IPhaseExecutionEvent = {
+      userId: id,
       phase,
       scenario,
+      context,
     };
     this.emit(PhaseExecutorEventType.STEPS_COMPLETED, completedEvent);
   }

@@ -6,7 +6,7 @@ import { listFiles } from "./utils/files";
 import { ScenarioExecutor } from "./executors/scenario-executor";
 import { PhaseExecutor } from "./executors/phase-executor";
 import { StepExecutor } from "./executors/step-executor";
-import { CliErrorListener } from "./listeners/cli-error-listener";
+import { CliListener } from "./listeners/cli-listener";
 
 const readVars = (varsPath: string): Record<string, unknown> => {
   const buffer = fs.readFileSync(varsPath);
@@ -29,14 +29,15 @@ async function processEntry(
   vars: Record<string, any>
 ): Promise<void> {
   const scenario = readConf(entry);
-  const cliListener = new CliErrorListener();
+  const cliListener = new CliListener();
 
   const scenarioExecutor = new ScenarioExecutor(scenario);
   cliListener.attachTo(scenarioExecutor);
 
   const stepExecutor = new StepExecutor([cliListener]);
+  cliListener.attachTo(stepExecutor);
 
-  const phaseExecutor = new PhaseExecutor(scenarioExecutor, stepExecutor);
+  const phaseExecutor = new PhaseExecutor(scenarioExecutor, stepExecutor, vars);
   cliListener.attachTo(phaseExecutor);
 
   scenarioExecutor.run();
@@ -62,7 +63,7 @@ const main = async (): Promise<void> => {
 
   const vars = valid ? await readVars(varsPath) : {};
 
-  console.log(`[*] Detected ${entries.length} entries!`);
+  console.log(` [*] Detected ${entries.length} entries!\n`);
   for (const entry of entries) {
     await processEntry(entry, vars);
   }

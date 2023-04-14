@@ -29,30 +29,45 @@ export interface ISpecError {
  Executor
 *******************************************************************************/
 
+export interface IContext {
+  ins: Record<string, Record<string, any>>;
+  outs: Record<string, Record<string, any>>;
+  vars: Record<string, any>;
+
+  /**
+   * Current step inputs.
+   */
+  $: Record<string, any>;
+}
+
 export interface IScenarioExecutionEvent {
-  phase: TPhase;
+  phase: IPhase;
   scenario: IScenario;
 }
 
 export interface IPhaseExecutionEvent {
-  phase: TPhase;
+  userId: string;
+  phase: IPhase;
   scenario: IScenario;
+  context: IContext;
 }
 
 export interface IStepExecutionEvent {
+  userId: string;
   step: IStep;
-  phase: TPhase;
+  phase: IPhase;
   scenario: IScenario;
-  context: Record<string, unknown>;
+  context: IContext;
 }
 
 export interface IHandlerExecutionEvent {
+  userId: string;
   step: IStep;
-  phase: TPhase;
+  phase: IPhase;
   scenario: IScenario;
-  context: Record<string, unknown>;
   handler: string;
   output?: unknown;
+  context: IContext;
 }
 
 /*******************************************************************************
@@ -67,19 +82,27 @@ export interface IHandler {
  Phase
 *******************************************************************************/
 
-export interface ILinearPhase {
+export interface IPhase {
+  type: string;
   name: string;
+}
+
+export interface ILinearPhase extends IPhase {
   type: "linear";
   duration: string;
   arrivalCount: number;
 }
 
-export interface IPausePhase {
+export interface IPausePhase extends IPhase {
   type: "pause";
   duration: string;
 }
 
-export type TPhase = ILinearPhase | IPausePhase;
+export interface IFixedPhase extends IPhase {
+  type: "fixed";
+  userCount: number;
+  duration: string;
+}
 
 /*******************************************************************************
  Step
@@ -88,22 +111,39 @@ export type TPhase = ILinearPhase | IPausePhase;
 export interface IStep {
   type: "http";
   name: string;
+  set?: IStepAssignment[];
 }
+
+export interface IStepAssignment {
+  key: string;
+  value: string;
+}
+
+export type THeaderValue = string | string[] | number | boolean | null;
 
 export interface IHttpStep extends IStep {
   type: "http";
-  target: string;
+  post: string;
+  get: string;
   in: Record<string, unknown>;
   out: Record<string, unknown>;
+  headers?: Record<string, THeaderValue>;
 }
 
 /*******************************************************************************
  Scenario
 *******************************************************************************/
 
+export interface IScenarioConfig {
+  base_url: string;
+  headers?: Record<string, any>;
+}
+
 export interface IScenario {
+  version: string;
   name: string;
-  phases: TPhase[];
+  config: IScenarioConfig;
+  phases: IPhase[];
   steps: IStep[];
   entry: IFileEntry;
 }

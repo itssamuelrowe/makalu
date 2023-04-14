@@ -22,6 +22,13 @@ export enum HandlerEventType {
 }
 
 export enum ErrorEventType {
+  HTTP_ERROR = "error:http",
   RESPONSE_ERROR = "error:response",
   SPEC_ERROR = "error:spec",
 }
+
+export const patterns: Record<string, string> = {
+  uuidv4: "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$",
+  ipv4_address: "^((25[0-5]|(2[0-4]|1d|[1-9]|)d).?\b){4}$",
+  utc_date: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+};

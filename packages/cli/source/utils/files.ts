@@ -14,7 +14,7 @@ export async function listFiles(
     if ((await fs.lstat(entry)).isDirectory()) {
       await listFiles(longName, shortName, list);
     } else {
-      if (shortName !== "vars.yaml") {
+      if (shortName !== "vars.yaml" && shortName.endsWith(".yaml")) {
         list.push({
           longName,
           shortName,

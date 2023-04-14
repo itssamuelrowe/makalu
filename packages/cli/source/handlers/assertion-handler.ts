@@ -1,6 +1,7 @@
 import { BaseHandler } from "./base-handler";
-import { ErrorEventType, HandlerEventType } from "../utils/constants";
+import { ErrorEventType, HandlerEventType, patterns } from "../utils/constants";
 import {
+  IContext,
   IFileEntry,
   IHandlerExecutionEvent,
   IHttpStep,
@@ -8,8 +9,10 @@ import {
   IStepExecutionEvent,
   TEqualityOperatorsMap,
 } from "../types";
+import { renderValue } from "../utils/render-value";
 
 export class AssertionHandler extends BaseHandler {
+  private context: IContext | null = null;
   public constructor(private scenario: IScenario, private entry: IFileEntry) {
     super();
   }
@@ -24,10 +27,7 @@ export class AssertionHandler extends BaseHandler {
         inverse: boolean
       ) => {
         const actual = actual0 as string;
-        const expected = this.renderValue(
-          expected0 as string,
-          this.scenario as any
-        ); // .context
+        const expected = renderValue(expected0 as string, this.context!);
 
         if (expected.startsWith("$")) {
           if (inverse && expected === "$string") {
@@ -59,7 +59,6 @@ export class AssertionHandler extends BaseHandler {
           });
           return false;
         } else if (!inverse && actual !== expected) {
-          console.log("Came here");
           this.emit(ErrorEventType.RESPONSE_ERROR, {
             message: "Values are not equal",
             actualKey,
@@ -209,6 +208,50 @@ export class AssertionHandler extends BaseHandler {
     return false;
   }
 
+  executeMatchOperator(
+    actualValue: unknown,
+    expectedValue: string,
+    actualKey: string,
+    expectedKey: string
+  ): boolean {
+    const actualValueType = typeof actualValue;
+
+    if (actualValueType !== "string") {
+      this.emit(ErrorEventType.RESPONSE_ERROR, {
+        message: "Unexpected value type",
+        actualKey,
+        expectedKey,
+        entry: this.entry,
+      });
+      return false;
+    }
+
+    if (!(expectedValue in patterns)) {
+      this.emit(ErrorEventType.SPEC_ERROR, {
+        message: "Unexpected value type",
+        actualKey,
+        expectedKey,
+        entry: this.entry,
+      });
+      return false;
+    }
+
+    const matched = new RegExp(patterns[expectedValue]).test(
+      actualValue as string
+    );
+
+    if (!matched) {
+      this.emit(ErrorEventType.RESPONSE_ERROR, {
+        message: `Unknown pattern name "${expectedValue}"`,
+        actualKey,
+        expectedKey,
+        entry: this.entry,
+      });
+    }
+
+    return matched;
+  }
+
   executeRegexOperator(
     actualValue: unknown,
     expectedValue: string,
@@ -295,6 +338,23 @@ export class AssertionHandler extends BaseHandler {
           parentExpectedKey
         );
       }
+      case "$match": {
+        if (typeof operand2 !== "string") {
+          this.emit(ErrorEventType.SPEC_ERROR, {
+            message: "$match operator expects valid pattern name",
+            actualKey: parentActualKey,
+            expectedKey: parentExpectedKey,
+            entry: this.entry,
+          });
+          return false;
+        }
+        return this.executeMatchOperator(
+          operand1,
+          operand2,
+          parentActualKey,
+          parentExpectedKey
+        );
+      }
     }
 
     return false;
@@ -305,7 +365,7 @@ export class AssertionHandler extends BaseHandler {
     expectedKey: string,
     expectedValue: unknown,
     parentActualKey: string,
-    parentExpectedKey: string,
+    parentExpectedKey: string
   ) {
     switch (expectedKey) {
       case "$equals":
@@ -405,20 +465,23 @@ export class AssertionHandler extends BaseHandler {
     this.scenario = event.scenario;
     this.entry = event.scenario.entry;
 
+    this.context = event.context;
+
     const startedEvent: IHandlerExecutionEvent = {
       ...event,
       handler: "assertion",
     };
     this.emit(HandlerEventType.HANDLER_STARTED, startedEvent);
 
-    if (event.step.type === "http") {
-      const response = (event.context.http as any).response.data as any;
-      const httpStep = event.step as IHttpStep;
+    // if (event.step.type === "http") {
+    const response = (event.context.outs[event.step.name] as any).response
+      .data as any;
+    const httpStep = event.step as IHttpStep;
 
-      if ((event.step as any).out) {
-        this.compareObjects(response, httpStep.out, "$root", "$root.out");
-      }
+    if ((event.step as any).out) {
+      this.compareObjects(response, httpStep.out, "$root", "$root.out");
     }
+    // }
 
     const completedEvent: IHandlerExecutionEvent = {
       ...event,

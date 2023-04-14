@@ -6,6 +6,7 @@ import {
 import axios, { AxiosResponse } from "axios";
 import { ErrorEventType, HandlerEventType } from "../utils/constants";
 import { BaseHandler } from "./base-handler";
+import { renderValue } from "../utils/render-value";
 
 export class HttpHandler extends BaseHandler {
   async handle(event: IStepExecutionEvent): Promise<unknown> {
@@ -17,7 +18,9 @@ export class HttpHandler extends BaseHandler {
 
     const step = event.step as IHttpStep;
 
-    let cleanTarget = step.target.trim();
+    const extractedTarget = step.post ?? step.get;
+
+    let cleanTarget = extractedTarget.trim();
     if (!cleanTarget) {
       this.emit(ErrorEventType.SPEC_ERROR, {
         message: "Target expected",
@@ -27,48 +30,78 @@ export class HttpHandler extends BaseHandler {
       return;
     }
 
-    const target = this.renderValue(cleanTarget, event.context);
-    const [method, url] = target.split(" ");
+    const { config } = event.scenario;
+
+    const baseUrl = renderValue(config.base_url, event.context);
+    const unprefixedUrl = renderValue(cleanTarget, event.context);
+    const method = step.post ? "post" : step.get ? "get" : "unknown";
+
+    const prefixedUrl = unprefixedUrl.startsWith("/")
+      ? unprefixedUrl
+      : "/" + unprefixedUrl;
+
+    const finalUrl = baseUrl ? `${baseUrl}${prefixedUrl}` : prefixedUrl;
+
+    const headers = Object.fromEntries(
+      Object.entries(step.headers ?? {}).map(([key, value]) => [
+        key,
+        // TODO: Fix this. Right now only string headers are accepted!
+        renderValue((value ?? "").toString(), event.context),
+      ])
+    );
 
     let response: AxiosResponse | null = null;
-    switch (method.toLowerCase()) {
-      case "get": {
-        response = await axios.get(url);
-        break;
-      }
+    try {
+      switch (method.toLowerCase()) {
+        case "get": {
+          response = await axios.get(finalUrl, {
+            params: event.context.$,
+            headers,
+          });
+          break;
+        }
 
-      case "post":
-      case "patch":
-      case "put":
-      case "delete": {
-        const body = JSON.stringify(step.in);
-        response = await (axios as any)[method](url, body, {
-          headers: {
-            "Content-Type": "application/json",
-          },
+        case "post":
+        case "patch":
+        case "put":
+        case "delete": {
+          /* Use the rendered "in" as the request body */
+          const body = JSON.stringify(event.context.$);
+          response = await (axios as any)[method](finalUrl, body, {
+            headers: {
+              "Content-Type": "application/json",
+              ...headers,
+            },
+          });
+
+          break;
+        }
+
+        default: {
+          this.emit(ErrorEventType.SPEC_ERROR, {
+            message: `Unsupported method type "${method}"`,
+            key: "$root.target",
+            entry: event.scenario.entry,
+          });
+          break;
+        }
+      }
+    } catch (error) {
+      response = (error as any).response;
+      if (!response) {
+        console.log(error);
+      }
+      else {
+        this.emit(ErrorEventType.HTTP_ERROR, {
+          response,
         });
-
-        break;
       }
-
-      default: {
-        this.emit(ErrorEventType.SPEC_ERROR, {
-          message: `Unsupported method type "${method}"`,
-          key: "$root.target",
-          entry: event.scenario.entry,
-        });
-        break;
-      }
-    }
-
-    if (!response) {
-      throw new Error("Why is response falsy?!");
     }
 
     const output = {
       handler: "http",
       request: {
-        url,
+        url: finalUrl,
         method,
         headers: {},
         params: {},
@@ -80,10 +113,10 @@ export class HttpHandler extends BaseHandler {
         maxDownloadRate: -1,
       },
       response: {
-        data: response.data,
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
+        data: response?.data ?? {},
+        status: response?.status ?? -1,
+        statusText: response?.statusText ?? "",
+        headers: response?.headers ?? {},
       },
     };
 
