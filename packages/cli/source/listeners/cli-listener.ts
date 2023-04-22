@@ -39,6 +39,7 @@ export class CliListener implements IListener {
   errors5xx = 0;
   errors4xx = 0;
   successfulRequests = 0;
+  startTime = new Date();
 
   attachTo(emitter: EventEmitter) {
     emitter.on(
@@ -96,7 +97,7 @@ export class CliListener implements IListener {
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
         process.stdout.write(
-          `totalRequests = ${this.totalRequests}, openRequests = ${this.openRequests}, errors = ${this.errors}, 5xx = ${this.errors5xx}, 4xx = ${this.errors4xx}, successfully closed = ${this.successfulRequests}`
+          `totalRequests = ${this.totalRequests}, openRequests = ${this.openRequests}, errors = ${this.errors}, 5xx = ${this.errors5xx}, 4xx = ${this.errors4xx}, successfully closed = ${this.successfulRequests}, duration = ${Math.abs(new Date().getTime() - this.startTime.getTime()) / 1000}s`
         );
 
         const date = new Date();
