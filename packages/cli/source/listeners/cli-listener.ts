@@ -94,10 +94,21 @@ export class CliListener implements IListener {
         this.totalRequests++;
         this.openRequests++;
 
+        const seconds =
+          Math.abs(new Date().getTime() - this.startTime.getTime()) / 1000;
+
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
         process.stdout.write(
-          `totalRequests = ${this.totalRequests}, openRequests = ${this.openRequests}, errors = ${this.errors}, 5xx = ${this.errors5xx}, 4xx = ${this.errors4xx}, successfully closed = ${this.successfulRequests}, duration = ${Math.abs(new Date().getTime() - this.startTime.getTime()) / 1000}s`
+          `totalRequests = ${this.totalRequests}, openRequests = ${
+            this.openRequests
+          }, errors = ${this.errors}, 5xx = ${this.errors5xx}, 4xx = ${
+            this.errors4xx
+          }, successfully closed = ${
+            this.successfulRequests
+          }, duration = ${seconds.toFixed(2)}s, velocity = ${(
+            this.totalRequests / seconds
+          ).toFixed(2)} RPS`
         );
 
         const date = new Date();
